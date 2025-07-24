@@ -89,6 +89,7 @@ int ionic_create_cq_common(struct ionic_vcq *vcq,
 
 	cq->vcq = vcq;
 
+	/* What is this check for? */
 	if (attr->cqe < 1 || attr->cqe + IONIC_CQ_GRACE > 0xffff) {
 		rc = -EINVAL;
 		goto err_args;
@@ -98,6 +99,7 @@ int ionic_create_cq_common(struct ionic_vcq *vcq,
 	if (rc)
 		goto err_cqid;
 
+	/* how is the eq id used? */
 	cq->eqid = ionic_get_eqid(dev, attr->comp_vector, udma_idx);
 
 	spin_lock_init(&cq->lock);
@@ -140,6 +142,7 @@ int ionic_create_cq_common(struct ionic_vcq *vcq,
 	if (rc)
 		goto err_pgtbl_init;
 
+	/* where are cq_rel_comp and cq_kref used */
 	init_completion(&cq->cq_rel_comp);
 	kref_init(&cq->cq_kref);
 
@@ -230,6 +233,9 @@ static int ionic_get_mrid(struct ionic_ibdev *dev, u32 *mrid)
 {
 	int rc;
 
+	/* how does the skip reserved lkey comment related to 
+	 * the - skip reserved lkey comment in ionic_init_resids()
+	*/
 	/* wrap to 1, skip reserved lkey */
 	rc = ionic_resid_get_shared(&dev->inuse_mrid, 1,
 				    dev->inuse_mrid.inuse_size);
@@ -261,6 +267,7 @@ static int ionic_get_qpid(struct ionic_ibdev *dev, u32 *qpid,
 
 	udma_x = dev->next_qpid_udma_idx;
 
+	// is there an explanation for get_qpid logic someplace?
 	dev->next_qpid_udma_idx ^= dev->lif_cfg.udma_count - 1;
 
 	for (udma_i = 0; udma_i < dev->lif_cfg.udma_count; ++udma_i) {
@@ -1244,17 +1251,22 @@ int ionic_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
 			goto err_req;
 	}
 
+	/* what role does udma_mask play? */
 	vcq->udma_mask = BIT(dev->lif_cfg.udma_count) - 1;
 
+	/* ?? */
 	if (udata)
 		vcq->udma_mask &= req.udma_mask;
 
+	/* when can this happen? */
 	if (!vcq->udma_mask) {
 		rc = -EINVAL;
 		goto err_init;
 	}
 
+	/* what is the role of udma_idx? */
 	for (; udma_idx < dev->lif_cfg.udma_count; ++udma_idx) {
+		/* when can this happen? */
 		if (!(vcq->udma_mask & BIT(udma_idx)))
 			continue;
 
@@ -1275,6 +1287,7 @@ int ionic_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
 	vcq->ibcq.cqe = attr->cqe;
 
 	if (udata) {
+		/* how is udma_mask used by the library?*/
 		resp.udma_mask = vcq->udma_mask;
 
 		rc = ib_copy_to_udata(udata, &resp, sizeof(resp));
@@ -1340,6 +1353,7 @@ static int ionic_create_qp_cmd(struct ionic_ibdev *dev,
 			       struct ionic_tbl_buf *rq_buf,
 			       struct ib_qp_init_attr *attr)
 {
+	// Whats the role of dbid?
 	const u16 dbid = ionic_obj_dbid(dev, pd->ibpd.uobject);
 	const u32 flags = to_ionic_qp_flags(0, 0,
 					    qp->sq_cmb & IONIC_CMB_ENABLE,
@@ -1805,15 +1819,18 @@ static int ionic_qp_sq_init(struct ionic_ibdev *dev, struct ionic_ctx *ctx,
 	u32 wqe_size;
 	int rc = 0;
 
+	// whats the role of these prod/cons?
 	qp->sq_msn_prod = 0;
 	qp->sq_msn_cons = 0;
 
+	// when is !qp->had_sq true?
 	if (!qp->has_sq) {
 		if (buf) {
 			buf->tbl_buf = NULL;
 			buf->tbl_limit = 0;
 			buf->tbl_pages = 0;
 		}
+		// why test for udata?
 		if (udata)
 			rc = ionic_validate_qdesc_zero(sq);
 
@@ -2213,8 +2230,10 @@ int ionic_create_qp(struct ib_qp *ibqp, struct ib_qp_init_attr *attr,
 	if (attr->qp_type == IB_QPT_GSI) {
 		rc = ionic_get_gsi_qpid(dev, &qp->qpid);
 	} else {
+		// what does udma_count mean?
 		udma_mask = BIT(dev->lif_cfg.udma_count) - 1;
 
+		// whats the point of udma_mask?
 		if (qp->has_sq)
 			udma_mask &= to_ionic_vcq(attr->send_cq)->udma_mask;
 
@@ -2228,7 +2247,6 @@ int ionic_create_qp(struct ib_qp *ibqp, struct ib_qp_init_attr *attr,
 			rc = -EINVAL;
 			goto err_qpid;
 		}
-
 		rc = ionic_get_qpid(dev, &qp->qpid, &qp->udma_idx, udma_mask);
 	}
 	if (rc)
@@ -2244,12 +2262,14 @@ int ionic_create_qp(struct ib_qp *ibqp, struct ib_qp_init_attr *attr,
 			goto err_ah_alloc;
 		}
 
+		// how is qp->ahid used?
 		rc = ionic_get_ahid(dev, &qp->ahid);
 		if (rc)
 			goto err_ahid;
 	}
 
 	if (udata) {
+		// does CMD_ENABLE imply the usage of CMB on the NIC, when does user space set IONIC_CMB_ENABLE?
 		if (req.rq_cmb & IONIC_CMB_ENABLE)
 			qp->rq_cmb = req.rq_cmb;
 
@@ -2283,6 +2303,7 @@ int ionic_create_qp(struct ib_qp *ibqp, struct ib_qp_init_attr *attr,
 		if (qp->sq_cmb & IONIC_CMB_ENABLE) {
 			bool wc;
 
+			// who sets UC/WC?
 			if ((qp->sq_cmb & (IONIC_CMB_WC | IONIC_CMB_UC)) ==
 				(IONIC_CMB_WC | IONIC_CMB_UC)) {
 				ibdev_dbg(&dev->ibdev,
@@ -2373,6 +2394,7 @@ int ionic_create_qp(struct ib_qp *ibqp, struct ib_qp_init_attr *attr,
 		cq = to_ionic_vcq_cq(attr->send_cq, qp->udma_idx);
 
 		attr->cap.max_send_wr = qp->sq.mask;
+		// What is IONIC_CMB_EXPDB?
 		attr->cap.max_send_sge =
 			ionic_v1_send_wqe_max_sge(qp->sq.stride_log2,
 						  qp->sq_spec,
@@ -2608,6 +2630,7 @@ int ionic_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr, int mask,
 	if (mask & IB_QP_CAP)
 		return -EINVAL;
 
+	/* what is happening in this call? */
 	rc = ionic_modify_qp_cmd(dev, pd, qp, attr, mask);
 	if (rc)
 		return rc;

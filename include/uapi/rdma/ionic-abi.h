@@ -53,8 +53,11 @@ struct ionic_ctx_resp {
 struct ionic_qdesc {
 	__aligned_u64 addr;
 	__u32 size;
+	// mask?
 	__u16 mask;
+	// depth_log2?
 	__u8 depth_log2;
+	// stride_log2?
 	__u8 stride_log2;
 };
 
